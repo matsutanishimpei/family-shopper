@@ -1,3 +1,5 @@
+console.log('app.js: Script started');
+
 let items = [];
 let currentFilter = 'all';
 let imageUrl = '';

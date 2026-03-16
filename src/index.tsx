@@ -123,7 +123,7 @@ app.get('/', (c) => {
           UPLOAD_PRESET: '${c.env.UPLOAD_PRESET}'
         };
       ` }} />
-      <script src="/app.js"></script>
+      <script src="/static/app.js"></script>
     </>
   )
 })

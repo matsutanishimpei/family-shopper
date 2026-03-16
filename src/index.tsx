@@ -130,24 +130,46 @@ app.get('/', (c) => {
         const previewImg = previewDiv.querySelector('img');
 
         // Cloudinary Widget Setup
-        console.log('Initializing Cloudinary widget with:', { cloudName: '${c.env.CLOUD_NAME}', uploadPreset: '${c.env.UPLOAD_PRESET}' });
-        const myWidget = cloudinary.createUploadWidget({
-          cloudName: '${c.env.CLOUD_NAME}', 
-          uploadPreset: '${c.env.UPLOAD_PRESET}'
-        }, (error, result) => { 
-          if (error) console.error('Cloudinary Error:', error);
-          if (result && result.event === "success") { 
-            console.log('Upload success:', result.info);
-            imageUrl = result.info.secure_url;
-            previewImg.src = imageUrl;
-            previewDiv.style.display = 'block';
-            document.getElementById('item-image-url').value = imageUrl;
+        let myWidget;
+        function initWidget() {
+          if (myWidget) return true;
+          if (typeof cloudinary === 'undefined') {
+            console.error('Cloudinary SDK not loaded');
+            return false;
           }
-        });
+          console.log('Initializing Cloudinary widget with:', { cloudName: '${c.env.CLOUD_NAME}', uploadPreset: '${c.env.UPLOAD_PRESET}' });
+          try {
+            myWidget = cloudinary.createUploadWidget({
+              cloudName: '${c.env.CLOUD_NAME}', 
+              uploadPreset: '${c.env.UPLOAD_PRESET}'
+            }, (error, result) => { 
+              if (error) console.error('Cloudinary Error:', error);
+              if (result && result.event === "success") { 
+                console.log('Upload success:', result.info);
+                imageUrl = result.info.secure_url;
+                previewImg.src = imageUrl;
+                previewDiv.style.display = 'block';
+                document.getElementById('item-image-url').value = imageUrl;
+              }
+            });
+            return true;
+          } catch (e) {
+            console.error('Failed to create widget:', e);
+            return false;
+          }
+        }
+
+        // Try initial init
+        initWidget();
 
         uploadBtn.onclick = () => {
           console.log('Upload button clicked');
-          myWidget.open();
+          if (initWidget()) {
+            console.log('Opening widget...');
+            myWidget.open();
+          } else {
+            alert('Cloudinaryの初期化に失敗しました。SDKが読み込まれていないか、設定が正しくありません。');
+          }
         };
 
         async function fetchItems() {

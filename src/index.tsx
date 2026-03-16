@@ -1,16 +1,269 @@
 import { Hono } from 'hono'
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { renderer } from './renderer'
 
 type Bindings = {
   DB: D1Database
   CLOUD_NAME: string
   UPLOAD_PRESET: string
+  ADMIN_USER: string
+  ADMIN_PASS: string
+  CLOUDINARY_API_KEY?: string
+  CLOUDINARY_API_SECRET?: string
 }
 
 
 const app = new Hono<{ Bindings: Bindings }>()
-
 app.use(renderer)
+
+// Helper: Hash password
+async function hashPassword(password: string): Promise<string> {
+  const msgUint8 = new TextEncoder().encode(password)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Middleware: Check Session
+const authMiddleware = async (c: any, next: any) => {
+  const session = getCookie(c, 'session')
+  if (!session && !c.req.path.startsWith('/login') && c.req.path !== '/api/login') {
+    return c.redirect('/login')
+  }
+  await next()
+}
+
+// Middleware: Admin Only
+const adminMiddleware = async (c: any, next: any) => {
+  const role = getCookie(c, 'role')
+  if (role !== 'admin') {
+    return c.text('Forbidden', 403)
+  }
+  await next()
+}
+
+// API: Login
+app.post('/api/login', async (c) => {
+  const { username, password } = await c.req.json()
+  
+  // Check against DB
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ?')
+    .bind(username)
+    .first() as any
+
+  let authenticated = false
+  let role = 'member'
+
+  if (user) {
+    const hashed = await hashPassword(password)
+    if (user.password_hash === hashed) {
+      authenticated = true
+      role = user.role
+    }
+  } else if (username === c.env.ADMIN_USER && password === c.env.ADMIN_PASS) {
+    // Initial Admin Bootstrap
+    authenticated = true
+    role = 'admin'
+    // Auto-register admin in DB
+    const hashed = await hashPassword(password)
+    await c.env.DB.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
+      .bind(username, hashed, 'admin')
+      .run()
+  }
+
+  if (authenticated) {
+    setCookie(c, 'session', username, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
+    setCookie(c, 'role', role, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
+    return c.json({ success: true, role })
+  }
+
+  return c.json({ success: false, error: 'Invalid username or password' }, 401)
+})
+
+// API: Logout
+app.post('/api/logout', (c) => {
+  deleteCookie(c, 'session')
+  deleteCookie(c, 'role')
+  return c.json({ success: true })
+})
+
+app.get('/login', (c) => {
+  return c.render(
+    <div class="card login-card" style="max-width: 400px; margin: 100px auto;">
+      <h1>Login</h1>
+      <form id="login-form">
+        <div class="input-group">
+          <input type="text" id="username" placeholder="ユーザー名" required class="full-width" style="margin-bottom: 10px;" />
+          <input type="password" id="password" placeholder="パスワード" required class="full-width" style="margin-bottom: 10px;" />
+        </div>
+        <button type="submit" class="primary full-width">ログイン</button>
+      </form>
+      <script dangerouslySetInnerHTML={{ __html: `
+        document.getElementById('login-form').onsubmit = async (e) => {
+          e.preventDefault();
+          const username = document.getElementById('username').value;
+          const password = document.getElementById('password').value;
+          const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          if (res.ok) {
+            window.location.href = '/';
+          } else {
+            alert('ログインに失敗しました。');
+          }
+        };
+      ` }} />
+    </div>
+  )
+})
+
+app.use('*', authMiddleware)
+
+// API: User Management (Admin Only)
+app.get('/api/admin/users', adminMiddleware, async (c) => {
+  const users = await c.env.DB.prepare('SELECT id, username, role FROM users').all()
+  return c.json(users.results || [])
+})
+
+app.post('/api/admin/users', adminMiddleware, async (c) => {
+  const { username, password, role } = await c.req.json()
+  const hashed = await hashPassword(password)
+  await c.env.DB.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
+    .bind(username, hashed, role || 'member')
+    .run()
+  return c.json({ success: true })
+})
+
+app.delete('/api/admin/users/:id', adminMiddleware, async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run()
+  return c.json({ success: true })
+})
+
+// API: Delete Item & Cloudinary Image (Admin Only)
+app.delete('/api/admin/items/:id', adminMiddleware, async (c) => {
+  const id = c.req.param('id')
+  const item = await c.env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first() as any
+  
+  if (item && item.image_url && c.env.CLOUDINARY_API_KEY && c.env.CLOUDINARY_API_SECRET) {
+    // Extract Public ID from URL (e.g., https://res.cloudinary.com/.../v12345/public_id.jpg)
+    const parts = item.image_url.split('/')
+    const filename = parts[parts.length - 1]
+    const publicId = filename.split('.')[0]
+    
+    // Cloudinary Admin API Delete
+    const timestamp = Math.round(new Date().getTime() / 1000)
+    const signature = await (async () => {
+      const str = `public_id=${publicId}&timestamp=${timestamp}${c.env.CLOUDINARY_API_SECRET}`
+      const msgUint8 = new TextEncoder().encode(str)
+      const hashBuffer = await crypto.subtle.digest('SHA-1', msgUint8) // Cloudinary uses SHA-1 for signatures
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+    })()
+
+    await fetch(`https://api.cloudinary.com/v1_1/${c.env.CLOUD_NAME}/image/destroy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        public_id: publicId,
+        timestamp: timestamp,
+        api_key: c.env.CLOUDINARY_API_KEY,
+        signature: signature
+      })
+    })
+  }
+
+  await c.env.DB.prepare('DELETE FROM items WHERE id = ?').bind(id).run()
+  return c.json({ success: true })
+})
+
+app.get('/admin', adminMiddleware, (c) => {
+  return c.render(
+    <div class="admin-page">
+      <div class="card">
+        <h1>管理者ページ</h1>
+        <p><a href="/">← メインページへ戻る</a></p>
+        
+        <section style="margin-top: 20px;">
+          <h2>家族ユーザー管理</h2>
+          <form id="user-form" class="input-group">
+            <input type="text" id="new-username" placeholder="名前" required />
+            <input type="password" id="new-password" placeholder="パスワード" required />
+            <select id="new-role">
+              <option value="member">家族メンバー</option>
+              <option value="admin">管理者</option>
+            </select>
+            <button type="submit" class="primary">追加</button>
+          </form>
+          <ul id="user-list" class="item-list" style="margin-top: 10px;"></ul>
+        </section>
+
+        <section style="margin-top: 30px;">
+          <h2>アイテム管理（画像完全削除）</h2>
+          <ul id="admin-item-list" class="item-list"></ul>
+        </section>
+      </div>
+
+      <script dangerouslySetInnerHTML={{ __html: `
+        async function loadUsers() {
+          const res = await fetch('/api/admin/users');
+          const users = await res.json();
+          const list = document.getElementById('user-list');
+          list.innerHTML = users.map(u => \`
+            <li class="item">
+              <span class="item-name">\${u.username} (\${u.role})</span>
+              \${u.username !== '${getCookie(c, 'session')}' ? \`<button onclick="deleteUser(\${u.id})" style="background:none;border:none;color:red;cursor:pointer;">削除</button>\` : ''}
+            </li>
+          \`).join('');
+        }
+
+        async function deleteUser(id) {
+          if (!confirm('本当に削除しますか？')) return;
+          await fetch('/api/admin/users/' + id, { method: 'DELETE' });
+          loadUsers();
+        }
+
+        document.getElementById('user-form').onsubmit = async (e) => {
+          e.preventDefault();
+          const username = document.getElementById('new-username').value;
+          const password = document.getElementById('new-password').value;
+          const role = document.getElementById('new-role').value;
+          await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, role })
+          });
+          e.target.reset();
+          loadUsers();
+        };
+
+        async function loadAdminItems() {
+          const res = await fetch('/api/items');
+          const items = await res.json();
+          const list = document.getElementById('admin-item-list');
+          list.innerHTML = items.map(item => \`
+            <li class="item">
+              \${item.image_url ? \`<img src="\${item.image_url}" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; margin-right:10px;" />\` : ''}
+              <span class="item-name">\${item.name}</span>
+              <button onclick="deleteItem(\${item.id})" style="margin-left:auto; background:#ff4757; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">完全削除</button>
+            </li>
+          \`).join('');
+        }
+
+        async function deleteItem(id) {
+          if (!confirm('Cloudinaryの画像も含め、完全に削除しますか？')) return;
+          await fetch('/api/admin/items/' + id, { method: 'DELETE' });
+          loadAdminItems();
+        }
+
+        loadUsers();
+        loadAdminItems();
+      ` }} />
+    </div>
+  )
+})
 
 // API: Get all items
 app.get('/api/items', async (c) => {
@@ -66,10 +319,24 @@ app.patch('/api/items/:id', async (c) => {
 
 
 app.get('/', (c) => {
+  const user = getCookie(c, 'session')
+  const role = getCookie(c, 'role')
+  
   return c.render(
     <>
+      <div class="user-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: white; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+        <div>
+          <span style="font-weight: 600; color: #333;">👤 {user} さん</span>
+          {role === 'admin' && (
+            <a href="/admin" style="margin-left: 15px; font-size: 0.9em; color: #6c5ce7; text-decoration: none;">⚙️ 管理者ページ</a>
+          )}
+        </div>
+        <button id="logout-btn" style="background: none; border: 1px solid #ddd; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #666;">ログアウト</button>
+      </div>
+
       <div class="card">
         <h1>Family Shopper</h1>
+        {/* ... existing form ... */}
         
         <form id="add-form">
           <div class="input-group">
@@ -137,6 +404,14 @@ app.get('/', (c) => {
             const previewImg = previewDiv.querySelector('img');
 
             if (!uploadBtn || !imageInput) return;
+
+            const logoutBtn = document.getElementById('logout-btn');
+            if (logoutBtn) {
+              logoutBtn.onclick = async () => {
+                await fetch('/api/logout', { method: 'POST' });
+                window.location.href = '/login';
+              };
+            }
 
             uploadBtn.onclick = () => imageInput.click();
 

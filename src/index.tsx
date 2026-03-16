@@ -325,8 +325,8 @@ app.get('/', (c) => {
         <img id="modal-img" class="modal-content" src="" alt="拡大画像" />
       </div>
 
-      <div id="reset-trigger" style="text-align: center; margin-top: 40px; padding: 20px; color: #ccc; font-size: 0.8em; cursor: pointer; user-select: none;">
-        &copy; 2026 Family Shopper
+      <div id="reset-trigger" style="text-align: center; margin-top: 40px; padding: 20px; color: #aaa; font-size: 0.8em; cursor: pointer; user-select: none;">
+        &copy; 2026-03-16 matsutani shinpei. All Rights Reserved.
       </div>
 
       <script dangerouslySetInnerHTML={{ __html: `

@@ -12,7 +12,6 @@ type Bindings = {
   CLOUDINARY_API_SECRET?: string
 }
 
-
 const app = new Hono<{ Bindings: Bindings }>()
 app.use(renderer)
 
@@ -45,38 +44,45 @@ const adminMiddleware = async (c: any, next: any) => {
 // API: Login
 app.post('/api/login', async (c) => {
   const { username, password } = await c.req.json()
+  console.log('Login attempt for:', username)
   
-  // Check against DB
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ?')
     .bind(username)
     .first() as any
+
+  console.log('DB User search result:', user ? 'User found' : 'User not found')
 
   let authenticated = false
   let role = 'member'
 
   if (user) {
     const hashed = await hashPassword(password)
+    console.log('User found in DB, comparing hashes...')
     if (user.password_hash === hashed) {
       authenticated = true
       role = user.role
     }
-  } else if (username === c.env.ADMIN_USER && password === c.env.ADMIN_PASS) {
-    // Initial Admin Bootstrap
-    authenticated = true
-    role = 'admin'
-    // Auto-register admin in DB
-    const hashed = await hashPassword(password)
-    await c.env.DB.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
-      .bind(username, hashed, 'admin')
-      .run()
+  } else {
+    console.log('Checking against Env Admins...')
+    if (username === c.env.ADMIN_USER && password === c.env.ADMIN_PASS) {
+      console.log('Matches Env Admins! Bootstrapping...')
+      authenticated = true
+      role = 'admin'
+      const hashed = await hashPassword(password)
+      await c.env.DB.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
+        .bind(username, hashed, 'admin')
+        .run()
+    }
   }
 
   if (authenticated) {
+    console.log('Login success as:', role)
     setCookie(c, 'session', username, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     setCookie(c, 'role', role, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     return c.json({ success: true, role })
   }
 
+  console.log('Login failed for:', username)
   return c.json({ success: false, error: 'Invalid username or password' }, 401)
 })
 
@@ -142,23 +148,21 @@ app.delete('/api/admin/users/:id', adminMiddleware, async (c) => {
   return c.json({ success: true })
 })
 
-// API: Delete Item & Cloudinary Image (Admin Only)
-app.delete('/api/admin/items/:id', adminMiddleware, async (c) => {
+// API: Delete Item & Cloudinary Image (Available to all logged-in users)
+app.delete('/api/items/:id', authMiddleware, async (c) => {
   const id = c.req.param('id')
   const item = await c.env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first() as any
   
   if (item && item.image_url && c.env.CLOUDINARY_API_KEY && c.env.CLOUDINARY_API_SECRET) {
-    // Extract Public ID from URL (e.g., https://res.cloudinary.com/.../v12345/public_id.jpg)
     const parts = item.image_url.split('/')
     const filename = parts[parts.length - 1]
     const publicId = filename.split('.')[0]
     
-    // Cloudinary Admin API Delete
     const timestamp = Math.round(new Date().getTime() / 1000)
     const signature = await (async () => {
       const str = `public_id=${publicId}&timestamp=${timestamp}${c.env.CLOUDINARY_API_SECRET}`
       const msgUint8 = new TextEncoder().encode(str)
-      const hashBuffer = await crypto.subtle.digest('SHA-1', msgUint8) // Cloudinary uses SHA-1 for signatures
+      const hashBuffer = await crypto.subtle.digest('SHA-1', msgUint8)
       const hashArray = Array.from(new Uint8Array(hashBuffer))
       return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
     })()
@@ -199,11 +203,6 @@ app.get('/admin', adminMiddleware, (c) => {
           </form>
           <ul id="user-list" class="item-list" style="margin-top: 10px;"></ul>
         </section>
-
-        <section style="margin-top: 30px;">
-          <h2>アイテム管理（画像完全削除）</h2>
-          <ul id="admin-item-list" class="item-list"></ul>
-        </section>
       </div>
 
       <script dangerouslySetInnerHTML={{ __html: `
@@ -239,84 +238,34 @@ app.get('/admin', adminMiddleware, (c) => {
           loadUsers();
         };
 
-        async function loadAdminItems() {
-          const res = await fetch('/api/items');
-          const items = await res.json();
-          const list = document.getElementById('admin-item-list');
-          list.innerHTML = items.map(item => \`
-            <li class="item">
-              \${item.image_url ? \`<img src="\${item.image_url}" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; margin-right:10px;" />\` : ''}
-              <span class="item-name">\${item.name}</span>
-              <button onclick="deleteItem(\${item.id})" style="margin-left:auto; background:#ff4757; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">完全削除</button>
-            </li>
-          \`).join('');
-        }
-
-        async function deleteItem(id) {
-          if (!confirm('Cloudinaryの画像も含め、完全に削除しますか？')) return;
-          await fetch('/api/admin/items/' + id, { method: 'DELETE' });
-          loadAdminItems();
-        }
-
         loadUsers();
-        loadAdminItems();
       ` }} />
     </div>
   )
 })
 
-// API: Get all items
+// API: Get items
 app.get('/api/items', async (c) => {
-  try {
-    if (!c.env?.DB) {
-      console.error('D1 Binding "DB" is not found in c.env')
-      return c.json({ error: 'Database binding missing' }, 500)
-    }
-    const { results } = await c.env.DB.prepare('SELECT * FROM items ORDER BY created_at DESC').all()
-    return c.json(results || [])
-  } catch (err: any) {
-    console.error('Error fetching items:', err)
-    return c.json({ error: err.message }, 500)
-  }
+  const { results } = await c.env.DB.prepare('SELECT * FROM items ORDER BY created_at DESC').all()
+  return c.json(results || [])
 })
 
-// API: Add new item
+// API: Add item
 app.post('/api/items', async (c) => {
-  try {
-    const { name, count, unit, category, image_url } = await c.req.json()
-    if (!c.env?.DB) {
-      return c.json({ error: 'Database binding missing' }, 500)
-    }
-    await c.env.DB.prepare(
-      'INSERT INTO items (name, count, unit, category, image_url) VALUES (?, ?, ?, ?, ?)'
-    )
-      .bind(name, count, unit, category, image_url || null)
-      .run()
-    return c.json({ success: true }, 201)
-  } catch (err: any) {
-    console.error('Error adding item:', err)
-    return c.json({ error: err.message }, 500)
-  }
+  const { name, count, unit, category, image_url } = await c.req.json()
+  await c.env.DB.prepare('INSERT INTO items (name, count, unit, category, image_url) VALUES (?, ?, ?, ?, ?)')
+    .bind(name, count, unit, category, image_url || null)
+    .run()
+  return c.json({ success: true }, 201)
 })
 
-// API: Toggle bought state
+// API: Update item
 app.patch('/api/items/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    const { bought } = await c.req.json()
-    if (!c.env?.DB) {
-      return c.json({ error: 'Database binding missing' }, 500)
-    }
-    await c.env.DB.prepare('UPDATE items SET bought = ? WHERE id = ?')
-      .bind(bought ? 1 : 0, id)
-      .run()
-    return c.json({ success: true })
-  } catch (err: any) {
-    console.error('Error updating item:', err)
-    return c.json({ error: err.message }, 500)
-  }
+  const id = c.req.param('id')
+  const { bought } = await c.req.json()
+  await c.env.DB.prepare('UPDATE items SET bought = ? WHERE id = ?').bind(bought ? 1 : 0, id).run()
+  return c.json({ success: true })
 })
-
 
 app.get('/', (c) => {
   const user = getCookie(c, 'session')
@@ -336,8 +285,6 @@ app.get('/', (c) => {
 
       <div class="card">
         <h1>Family Shopper</h1>
-        {/* ... existing form ... */}
-        
         <form id="add-form">
           <div class="input-group">
             <input type="text" id="item-name" placeholder="何を買う？" required class="full-width" />
@@ -378,9 +325,7 @@ app.get('/', (c) => {
           <button class="filter-btn" data-filter="kids">子ども用</button>
           <button class="filter-btn" data-filter="other">その他</button>
         </div>
-        
-        <ul id="item-list" class="item-list">
-        </ul>
+        <ul id="item-list" class="item-list"></ul>
       </div>
 
       <script dangerouslySetInnerHTML={{ __html: `
@@ -418,21 +363,17 @@ app.get('/', (c) => {
             imageInput.onchange = async (e) => {
               const file = e.target.files[0];
               if (!file) return;
-
               uploadBtn.innerText = '⌛ アップロード中...';
               uploadBtn.disabled = true;
-
               const formData = new FormData();
               formData.append('file', file);
               formData.append('upload_preset', config.uploadPreset);
-
               try {
                 const res = await fetch(\`https://api.cloudinary.com/v1_1/\${config.cloudName}/image/upload\`, {
                   method: 'POST',
                   body: formData
                 });
                 const data = await res.json();
-                
                 if (data.secure_url) {
                   imageUrl = data.secure_url;
                   previewImg.src = imageUrl;
@@ -440,12 +381,10 @@ app.get('/', (c) => {
                   document.getElementById('item-image-url').value = imageUrl;
                   uploadBtn.innerText = '✅ 完了 (変更するには再度タップ)';
                 } else {
-                  console.error('Upload failed:', data);
                   alert('アップロードに失敗しました。');
                   uploadBtn.innerText = '📷 写真を撮る・選ぶ';
                 }
               } catch (err) {
-                console.error('Error uploading:', err);
                 alert('通信エラーが発生しました。');
                 uploadBtn.innerText = '📷 写真を撮る・選ぶ';
               } finally {
@@ -460,13 +399,11 @@ app.get('/', (c) => {
               const unit = document.getElementById('item-unit').value;
               const category = document.getElementById('item-category').value;
               const image_url = document.getElementById('item-image-url').value;
-              
               await fetch('/api/items', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, count, unit, category, image_url })
               });
-              
               form.reset();
               previewDiv.style.display = 'none';
               imageUrl = '';
@@ -492,7 +429,6 @@ app.get('/', (c) => {
             function render() {
               list.innerHTML = '';
               const filtered = currentFilter === 'all' ? items : items.filter(i => i.category === currentFilter);
-              
               filtered.forEach((item) => {
                 const li = document.createElement('li');
                 li.className = 'item' + (item.bought ? ' bought' : '');
@@ -504,6 +440,7 @@ app.get('/', (c) => {
                     <span class="item-meta">\${item.count}\${item.unit}</span>
                     <span class="badge badge-\${item.category}">\${getCategoryName(item.category)}</span>
                   </div>
+                  <button onclick="event.stopPropagation(); deleteItem(\${item.id})" style="margin-left:auto; background:none; border:none; font-size:1.2em; cursor:pointer; padding:5px;">🗑️</button>
                 \`;
                 li.onclick = () => toggleBought(item.id, !item.bought);
                 list.appendChild(li);
@@ -524,6 +461,12 @@ app.get('/', (c) => {
               await fetchItems();
             }
 
+            window.deleteItem = async function(id) {
+              if (!confirm('画像をCloudinaryからも完全に削除しますか？')) return;
+              await fetch('/api/items/' + id, { method: 'DELETE' });
+              await fetchItems();
+            };
+
             fetchItems();
           }
 
@@ -539,6 +482,3 @@ app.get('/', (c) => {
 })
 
 export default app
-
-
-

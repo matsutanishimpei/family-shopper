@@ -44,28 +44,22 @@ const adminMiddleware = async (c: any, next: any) => {
 // API: Login
 app.post('/api/login', async (c) => {
   const { username, password } = await c.req.json()
-  console.log('Login attempt for:', username)
   
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ?')
     .bind(username)
     .first() as any
-
-  console.log('DB User search result:', user ? 'User found' : 'User not found')
 
   let authenticated = false
   let role = 'member'
 
   if (user) {
     const hashed = await hashPassword(password)
-    console.log('User found in DB, comparing hashes...')
     if (user.password_hash === hashed) {
       authenticated = true
       role = user.role
     }
   } else {
-    console.log('Checking against Env Admins...')
     if (username === c.env.ADMIN_USER && password === c.env.ADMIN_PASS) {
-      console.log('Matches Env Admins! Bootstrapping...')
       authenticated = true
       role = 'admin'
       const hashed = await hashPassword(password)
@@ -76,13 +70,11 @@ app.post('/api/login', async (c) => {
   }
 
   if (authenticated) {
-    console.log('Login success as:', role)
     setCookie(c, 'session', username, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     setCookie(c, 'role', role, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     return c.json({ success: true, role })
   }
 
-  console.log('Login failed for:', username)
   return c.json({ success: false, error: 'Invalid username or password' }, 401)
 })
 
@@ -328,6 +320,10 @@ app.get('/', (c) => {
         <ul id="item-list" class="item-list"></ul>
       </div>
 
+      <div id="image-modal" class="modal-overlay" onclick="closeModal()">
+        <img id="modal-img" class="modal-content" src="" alt="拡大画像" />
+      </div>
+
       <script dangerouslySetInnerHTML={{ __html: `
         (function() {
           let items = [];
@@ -434,10 +430,10 @@ app.get('/', (c) => {
                 li.className = 'item' + (item.bought ? ' bought' : '');
                 li.innerHTML = \`
                   <div class="checkbox"></div>
-                  \${item.image_url ? \`<img src="\${item.image_url}" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;" />\` : ''}
+                  \${item.image_url ? \`<img src="\${item.image_url}" onclick="event.stopPropagation(); showModal('\${item.image_url}')" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; cursor: zoom-in;" title="タップで拡大" />\` : ''}
                   <div class="item-info">
                     <span class="item-name">\${item.name}</span>
-                    <span class="item-meta">\${item.count}\${item.unit}</span>
+                    <span class="item-meta">購入数: <span class="item-count-label">\${item.count}\${item.unit}</span></span>
                     <span class="badge badge-\${item.category}">\${getCategoryName(item.category)}</span>
                   </div>
                   <button onclick="event.stopPropagation(); deleteItem(\${item.id})" style="margin-left:auto; background:none; border:none; font-size:1.2em; cursor:pointer; padding:5px;">🗑️</button>
@@ -465,6 +461,17 @@ app.get('/', (c) => {
               if (!confirm('画像をCloudinaryからも完全に削除しますか？')) return;
               await fetch('/api/items/' + id, { method: 'DELETE' });
               await fetchItems();
+            };
+
+            window.showModal = function(url) {
+              const modal = document.getElementById('image-modal');
+              const modalImg = document.getElementById('modal-img');
+              modalImg.src = url;
+              modal.style.display = 'flex';
+            };
+
+            window.closeModal = function() {
+              document.getElementById('image-modal').style.display = 'none';
             };
 
             fetchItems();

@@ -130,11 +130,14 @@ app.get('/', (c) => {
         const previewImg = previewDiv.querySelector('img');
 
         // Cloudinary Widget Setup
+        console.log('Initializing Cloudinary widget with:', { cloudName: '${c.env.CLOUD_NAME}', uploadPreset: '${c.env.UPLOAD_PRESET}' });
         const myWidget = cloudinary.createUploadWidget({
           cloudName: '${c.env.CLOUD_NAME}', 
           uploadPreset: '${c.env.UPLOAD_PRESET}'
         }, (error, result) => { 
-          if (!error && result && result.event === "success") { 
+          if (error) console.error('Cloudinary Error:', error);
+          if (result && result.event === "success") { 
+            console.log('Upload success:', result.info);
             imageUrl = result.info.secure_url;
             previewImg.src = imageUrl;
             previewDiv.style.display = 'block';
@@ -142,7 +145,10 @@ app.get('/', (c) => {
           }
         });
 
-        uploadBtn.onclick = () => myWidget.open();
+        uploadBtn.onclick = () => {
+          console.log('Upload button clicked');
+          myWidget.open();
+        };
 
         async function fetchItems() {
           const res = await fetch('/api/items');

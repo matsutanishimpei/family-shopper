@@ -91,8 +91,9 @@ app.get('/', (c) => {
               <option value="other">その他</option>
             </select>
             <input type="hidden" id="item-image-url" />
+            <input type="file" id="image-input" accept="image/*" capture="environment" style="display: none;" />
             <button type="button" id="upload-button" class="filter-btn full-width" style="margin-top: 10px;">
-              📷 画像をアップロード
+              📷 写真を撮る・選ぶ
             </button>
             <div id="image-preview" style="display: none; width: 100%; text-align: center; margin-top: 10px;">
               <img src="" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px;" />
@@ -115,14 +116,11 @@ app.get('/', (c) => {
         </ul>
       </div>
 
-      <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
       <script dangerouslySetInnerHTML={{ __html: `
         (function() {
-          console.log('App initialization started');
           let items = [];
           let currentFilter = 'all';
           let imageUrl = '';
-          let myWidget = null;
 
           const config = {
             cloudName: '${c.env.CLOUD_NAME}',
@@ -130,51 +128,55 @@ app.get('/', (c) => {
           };
 
           function init() {
-            console.log('DOM Content Loaded - setting up events');
-            const uploadBtn = document.getElementById('upload-button');
-            const previewDiv = document.getElementById('image-preview');
-            const previewImg = previewDiv.querySelector('img');
-
-            if (!uploadBtn) {
-              console.error('Upload button not found!');
-              return;
-            }
-
-            // Remove any existing listener and add a new robust one
-            const newBtn = uploadBtn.cloneNode(true);
-            uploadBtn.parentNode.replaceChild(newBtn, uploadBtn);
-
-            newBtn.addEventListener('click', function() {
-              console.log('Upload button clicked via EventListener');
-              alert('アップロードボタンが押されました。ウィジェットを起動します。'); 
-              
-              if (typeof cloudinary === 'undefined') {
-                console.error('Cloudinary SDK is undefined');
-                alert('Cloudinary SDKが読み込まれていません。ネットワーク状況を確認してください。');
-                return;
-              }
-
-              if (!myWidget) {
-                console.log('Creating widget with config:', config);
-                myWidget = cloudinary.createUploadWidget(config, (error, result) => {
-                  if (error) console.error('Cloudinary Error:', error);
-                  if (result && result.event === "success") {
-                    console.log('Upload success:', result.info);
-                    imageUrl = result.info.secure_url;
-                    previewImg.src = imageUrl;
-                    previewDiv.style.display = 'block';
-                    document.getElementById('item-image-url').value = imageUrl;
-                  }
-                });
-              }
-              console.log('Opening widget...');
-              myWidget.open();
-            });
-
-            // Re-bind form and filters to the new context if needed
             const form = document.getElementById('add-form');
             const list = document.getElementById('item-list');
             const filters = document.querySelectorAll('.filter-btn');
+            const uploadBtn = document.getElementById('upload-button');
+            const imageInput = document.getElementById('image-input');
+            const previewDiv = document.getElementById('image-preview');
+            const previewImg = previewDiv.querySelector('img');
+
+            if (!uploadBtn || !imageInput) return;
+
+            uploadBtn.onclick = () => imageInput.click();
+
+            imageInput.onchange = async (e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+
+              uploadBtn.innerText = '⌛ アップロード中...';
+              uploadBtn.disabled = true;
+
+              const formData = new FormData();
+              formData.append('file', file);
+              formData.append('upload_preset', config.uploadPreset);
+
+              try {
+                const res = await fetch(\`https://api.cloudinary.com/v1_1/\${config.cloudName}/image/upload\`, {
+                  method: 'POST',
+                  body: formData
+                });
+                const data = await res.json();
+                
+                if (data.secure_url) {
+                  imageUrl = data.secure_url;
+                  previewImg.src = imageUrl;
+                  previewDiv.style.display = 'block';
+                  document.getElementById('item-image-url').value = imageUrl;
+                  uploadBtn.innerText = '✅ 完了 (変更するには再度タップ)';
+                } else {
+                  console.error('Upload failed:', data);
+                  alert('アップロードに失敗しました。');
+                  uploadBtn.innerText = '📷 写真を撮る・選ぶ';
+                }
+              } catch (err) {
+                console.error('Error uploading:', err);
+                alert('通信エラーが発生しました。');
+                uploadBtn.innerText = '📷 写真を撮る・選ぶ';
+              } finally {
+                uploadBtn.disabled = false;
+              }
+            };
 
             form.onsubmit = async (e) => {
               e.preventDefault();
@@ -193,6 +195,7 @@ app.get('/', (c) => {
               form.reset();
               previewDiv.style.display = 'none';
               imageUrl = '';
+              uploadBtn.innerText = '📷 写真を撮る・選ぶ';
               await fetchItems();
             };
 

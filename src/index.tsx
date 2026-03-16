@@ -92,7 +92,7 @@ app.get('/', (c) => {
             </select>
             <input type="hidden" id="item-image-url" />
             <input type="file" id="image-input" accept="image/*" capture="environment" style="display: none;" />
-            <button type="button" id="upload-button" class="filter-btn full-width" style="margin-top: 10px;">
+            <button type="button" id="upload-button" class="upload-btn-ui full-width" style="margin-top: 10px; background: #f0f2f5; border: 1px solid #ddd; padding: 10px; border-radius: 8px; cursor: pointer;">
               📷 写真を撮る・選ぶ
             </button>
             <div id="image-preview" style="display: none; width: 100%; text-align: center; margin-top: 10px;">

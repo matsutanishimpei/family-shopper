@@ -279,7 +279,8 @@ app.get('/', (c) => {
         <h1>Family Shopper</h1>
         <form id="add-form">
           <div class="input-group">
-            <input type="text" id="item-name" placeholder="何を買う？" required class="full-width" />
+            <input type="text" id="item-name" placeholder="何を買う？" required class="full-width" list="item-history" />
+            <datalist id="item-history"></datalist>
             <input type="number" id="item-count" placeholder="個数" min="1" value="1" />
             <select id="item-unit">
               <option value="個">個</option>
@@ -324,11 +325,16 @@ app.get('/', (c) => {
         <img id="modal-img" class="modal-content" src="" alt="拡大画像" />
       </div>
 
+      <div id="reset-trigger" style="text-align: center; margin-top: 40px; padding: 20px; color: #ccc; font-size: 0.8em; cursor: pointer; user-select: none;">
+        &copy; 2026 Family Shopper
+      </div>
+
       <script dangerouslySetInnerHTML={{ __html: `
         (function() {
           let items = [];
           let currentFilter = 'all';
           let imageUrl = '';
+          let purchaseHistory = JSON.parse(localStorage.getItem('purchase_history') || '[]');
 
           const config = {
             cloudName: '${c.env.CLOUD_NAME}',
@@ -343,6 +349,10 @@ app.get('/', (c) => {
             const imageInput = document.getElementById('image-input');
             const previewDiv = document.getElementById('image-preview');
             const previewImg = previewDiv.querySelector('img');
+            const dataList = document.getElementById('item-history');
+            const resetTrigger = document.getElementById('reset-trigger');
+
+            updateHistoryUI();
 
             if (!uploadBtn || !imageInput) return;
 
@@ -353,6 +363,30 @@ app.get('/', (c) => {
                 window.location.href = '/login';
               };
             }
+
+            // Hidden reset function (3 taps)
+            let tapCount = 0;
+            let lastTap = 0;
+            resetTrigger.onclick = () => {
+              const now = Date.now();
+              if (now - lastTap < 500) {
+                tapCount++;
+              } else {
+                tapCount = 1;
+              }
+              lastTap = now;
+
+              if (tapCount >= 3) {
+                if (confirm('ローカルのデータをすべて初期化しますか？')) {
+                  localStorage.clear();
+                  document.cookie.split(";").forEach(function(c) { 
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+                  });
+                  window.location.reload();
+                }
+                tapCount = 0;
+              }
+            };
 
             uploadBtn.onclick = () => imageInput.click();
 
@@ -395,17 +429,34 @@ app.get('/', (c) => {
               const unit = document.getElementById('item-unit').value;
               const category = document.getElementById('item-category').value;
               const image_url = document.getElementById('item-image-url').value;
-              await fetch('/api/items', {
+              
+              const res = await fetch('/api/items', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, count, unit, category, image_url })
               });
-              form.reset();
-              previewDiv.style.display = 'none';
-              imageUrl = '';
-              uploadBtn.innerText = '📷 写真を撮る・選ぶ';
-              await fetchItems();
+              
+              if (res.ok) {
+                // Add to history
+                if (!purchaseHistory.includes(name)) {
+                  purchaseHistory.unshift(name);
+                  if (purchaseHistory.length > 20) purchaseHistory.pop();
+                  localStorage.setItem('purchase_history', JSON.stringify(purchaseHistory));
+                  updateHistoryUI();
+                }
+                form.reset();
+                previewDiv.style.display = 'none';
+                imageUrl = '';
+                uploadBtn.innerText = '📷 写真を撮る・選ぶ';
+                await fetchItems();
+              }
             };
+
+            function updateHistoryUI() {
+              if (dataList) {
+                dataList.innerHTML = purchaseHistory.map(h => \`<option value="\${h}">\`).join('');
+              }
+            }
 
             filters.forEach(btn => {
               btn.onclick = () => {

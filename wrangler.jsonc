@@ -1,34 +1,38 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "api",
-  "compatibility_date": "2026-03-16",
-  "pages_build_output_dir": "./dist",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ]
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
-  // "r2_buckets": [
-  //   {
-  //     "binding": "MY_BUCKET",
-  //     "bucket_name": "my-bucket"
-  //   }
-  // ],
-  // "d1_databases": [
-  //   {
-  //     "binding": "MY_DB",
-  //     "database_name": "my-database",
-  //     "database_id": ""
-  //   }
-  // ],
-  // "ai": {
-  //   "binding": "AI"
-  // }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "api",
+	"compatibility_date": "2026-03-16",
+	"pages_build_output_dir": "./dist",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// "vars": {
+	//   "MY_VAR": "my-variable"
+	// },
+	// "kv_namespaces": [
+	//   {
+	//     "binding": "MY_KV_NAMESPACE",
+	//     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+	//   }
+	// ],
+	// "r2_buckets": [
+	//   {
+	//     "binding": "MY_BUCKET",
+	//     "bucket_name": "my-bucket"
+	//   }
+	// ],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "family-shopper-db",
+			"database_id": "9cee6cb3-d011-4e01-86f8-b15c4b479bc7"
+		}
+	],
+	"vars": {
+		"CLOUD_NAME": "dummy_name",
+		"UPLOAD_PRESET": "dummy_preset"
+	},
+	// "ai": {
+	//   "binding": "AI"
+	// }
 }

@@ -146,6 +146,12 @@
       render();
     }
 
+    function escapeHTML(str) {
+      if (!str) return '';
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return String(str).replace(/[&<>"']/g, m => map[m]);
+    }
+
     function render() {
       if (!list) return;
       list.innerHTML = '';
@@ -155,11 +161,11 @@
         li.className = 'item' + (item.bought ? ' bought' : '');
         li.innerHTML = `
           <div class="checkbox"></div>
-          ${item.image_url ? `<img src="${item.image_url}" onclick="event.stopPropagation(); showModal('${item.image_url}')" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; cursor: zoom-in;" title="タップで拡大" />` : ''}
+          ${item.image_url ? `<img src="${escapeHTML(item.image_url)}" onclick="event.stopPropagation(); showModal('${escapeHTML(item.image_url)}')" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; cursor: zoom-in;" title="タップで拡大" />` : ''}
           <div class="item-info">
-            <span class="item-name">${item.name}</span>
-            <span class="item-meta">購入数: <span class="item-count-label">${item.count}${item.unit}</span></span>
-            <span class="badge badge-${item.category}">${getCategoryName(item.category)}</span>
+            <span class="item-name">${escapeHTML(item.name)}</span>
+            <span class="item-meta">購入数: <span class="item-count-label">${escapeHTML(item.count)}${escapeHTML(item.unit)}</span></span>
+            <span class="badge badge-${escapeHTML(item.category)}">${escapeHTML(getCategoryName(item.category))}</span>
           </div>
           <button onclick="event.stopPropagation(); deleteItem(${item.id})" style="margin-left:auto; background:none; border:none; font-size:1.2em; cursor:pointer; padding:5px;">🗑️</button>
         `;

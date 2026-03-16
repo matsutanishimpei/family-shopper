@@ -1,16 +1,21 @@
 (function() {
+  function escapeHTML(str) {
+    if (!str) return '';
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return String(str).replace(/[&<>"']/g, m => map[m]);
+  }
+
   async function loadUsers() {
     const res = await fetch('/api/admin/users');
     const users = await res.json();
     const list = document.getElementById('user-list');
     if (!list) return;
 
-    // currentUser is expected to be defined globally via an inline script
     const currentUser = window.CURRENT_USER || '';
 
     list.innerHTML = users.map(u => `
       <li class="item">
-        <span class="item-name">${u.username} (${u.role})</span>
+        <span class="item-name">${escapeHTML(u.username)} (${escapeHTML(u.role)})</span>
         ${u.username !== currentUser ? `<button onclick="deleteUser(${u.id})" style="background:none;border:none;color:red;cursor:pointer;">削除</button>` : ''}
       </li>
     `).join('');

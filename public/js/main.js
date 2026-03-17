@@ -2,6 +2,7 @@
   let items = [];
   let currentFilter = 'all';
   let imageUrl = '';
+  let currentPublicId = '';
   let purchaseHistory = JSON.parse(localStorage.getItem('purchase_history') || '[]');
 
   // window.APP_CONFIG should be defined via inline script in the HTML
@@ -12,6 +13,7 @@
     const list = document.getElementById('item-list');
     const filters = document.querySelectorAll('.filter-btn');
     const uploadBtn = document.getElementById('upload-button');
+    const submitBtn = form.querySelector('button[type="submit"]');
     const imageInput = document.getElementById('image-input');
     const previewDiv = document.getElementById('image-preview');
     const previewImg = previewDiv ? previewDiv.querySelector('img') : null;
@@ -62,8 +64,20 @@
       imageInput.onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        // If there's an existing uploaded image that wasn't added to the list, delete it
+        if (currentPublicId) {
+          fetch('/api/images/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ public_id: currentPublicId })
+          }).catch(console.error);
+        }
+
         uploadBtn.innerText = '⌛ アップロード中...';
         uploadBtn.disabled = true;
+        if (submitBtn) submitBtn.disabled = true;
+
         const formData = new FormData();
         formData.append('file', file);
         formData.append('upload_preset', config.uploadPreset);
@@ -75,6 +89,7 @@
           const data = await res.json();
           if (data.secure_url) {
             imageUrl = data.secure_url;
+            currentPublicId = data.public_id;
             if (previewImg) previewImg.src = imageUrl;
             if (previewDiv) previewDiv.style.display = 'block';
             const hiddenInput = document.getElementById('item-image-url');
@@ -89,6 +104,7 @@
           uploadBtn.innerText = '📷 写真を撮る・選ぶ';
         } finally {
           uploadBtn.disabled = false;
+          if (submitBtn) submitBtn.disabled = false;
         }
       };
     }
@@ -118,6 +134,7 @@
         form.reset();
         if (previewDiv) previewDiv.style.display = 'none';
         imageUrl = '';
+        currentPublicId = '';
         if (uploadBtn) uploadBtn.innerText = '📷 写真を撮る・選ぶ';
         await fetchItems();
       }

@@ -121,12 +121,40 @@ app.patch('/api/items/:id', authMiddleware, async (c) => {
   return c.json({ success: true })
 })
 
+app.post('/api/images/delete', authMiddleware, async (c) => {
+  const { public_id } = await c.req.json()
+  if (!public_id || !c.env.CLOUDINARY_API_KEY || !c.env.CLOUDINARY_API_SECRET) {
+    return c.json({ success: false, error: 'Missing credentials or public_id' }, 400)
+  }
+
+  const timestamp = Math.round(new Date().getTime() / 1000)
+  const str = `public_id=${public_id}&timestamp=${timestamp}${c.env.CLOUDINARY_API_SECRET}`
+  const msgUint8 = new TextEncoder().encode(str)
+  const hashBuffer = await crypto.subtle.digest('SHA-1', msgUint8)
+  const signature = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${c.env.CLOUD_NAME}/image/destroy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ public_id, timestamp, api_key: c.env.CLOUDINARY_API_KEY, signature })
+  })
+  
+  const data = await res.json() as any
+  return c.json({ success: data.result === 'ok' })
+})
+
 app.delete('/api/items/:id', authMiddleware, async (c) => {
   const id = c.req.param('id')
   const item = await c.env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first() as any
   
   if (item && item.image_url && c.env.CLOUDINARY_API_KEY && c.env.CLOUDINARY_API_SECRET) {
-    const publicId = item.image_url.split('/').pop().split('.')[0]
+    const parts = item.image_url.split('/')
+    const fileName = parts.pop()
+    const publicId = fileName.split('.')[0]
+    
+    // If there are folders, we might need them, but Cloudinary upload usually returns just the filename if no folder is specified.
+    // However, the current code just takes the last part. Let's stick with that for now as it matches the upload logic.
+    
     const timestamp = Math.round(new Date().getTime() / 1000)
     const str = `public_id=${publicId}&timestamp=${timestamp}${c.env.CLOUDINARY_API_SECRET}`
     const msgUint8 = new TextEncoder().encode(str)

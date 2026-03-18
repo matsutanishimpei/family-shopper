@@ -50,7 +50,7 @@ auth.post('/api/login', async (c) => {
     setCookie(c, 'session', username, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     setCookie(c, 'family_id', familyId.toString(), { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     setCookie(c, 'role', role, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
-    return c.json({ success: true, role })
+    return c.json({ success: true, role, isSuperAdmin: username === c.env.ADMIN_USER })
   }
   
   return c.json({ success: false, error: 'Invalid credentials or family name' }, 401)

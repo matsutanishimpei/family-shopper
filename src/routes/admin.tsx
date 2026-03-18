@@ -7,8 +7,8 @@ import type { Bindings, Variables } from '../types'
 
 const admin = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
-admin.use('*', authMiddleware)
-admin.use('*', adminMiddleware)
+admin.use('/admin', authMiddleware, adminMiddleware)
+admin.use('/api/admin/*', authMiddleware, adminMiddleware)
 
 admin.get('/admin', async (c) => {
   const user = getCookie(c, 'session')!

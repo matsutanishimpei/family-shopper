@@ -14,7 +14,7 @@
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.role === 'admin') {
+      if (data.isSuperAdmin) {
         window.location.href = '/admin';
       } else {
         window.location.href = '/';

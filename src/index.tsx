@@ -94,18 +94,33 @@ app.get('/api/check', (c) => c.json({ status: 'ok' }))
 
 // Family Registration API
 app.post('/api/register-family', async (c) => {
-  const { familyName, username, password } = await c.req.json()
-  
-  // 1. 家族を登録
-  const result = await c.env.DB.prepare('INSERT INTO families (name) VALUES (?) RETURNING id').bind(familyName).first() as any
-  const familyId = result.id
+  try {
+    const { familyName, username, password } = await c.req.json()
+    
+    if (!familyName || !username || !password) {
+      return c.json({ success: false, error: 'Missing required fields' }, 400)
+    }
 
-  // 2. その家族の管理者ユーザーを登録
-  const hashed = await hashPassword(password)
-  await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, ?)')
-    .bind(username, hashed, 'admin', familyId).run()
+    // 1. 家族を登録
+    const result = await c.env.DB.prepare('INSERT INTO families (name) VALUES (?) RETURNING id')
+      .bind(familyName)
+      .first() as { id: number } | null
+    
+    if (!result || !result.id) {
+      throw new Error('Failed to create family record')
+    }
+    const familyId = result.id
 
-  return c.json({ success: true, familyId })
+    // 2. その家族の管理者ユーザーを登録
+    const hashed = await hashPassword(password)
+    await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, ?)')
+      .bind(username, hashed, 'admin', familyId).run()
+
+    return c.json({ success: true, familyId })
+  } catch (err: any) {
+    console.error('Registration Error:', err)
+    return c.json({ success: false, error: err.message || 'Internal Server Error' }, 500)
+  }
 })
 
 // Logout API

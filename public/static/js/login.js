@@ -48,7 +48,8 @@
         document.getElementById('username').value = username;
         document.getElementById('password').value = password;
       } else {
-        alert('登録に失敗しました。');
+        const data = await res.json();
+        alert('登録に失敗しました: ' + (data.error || '不明なエラー'));
       }
     };
   }

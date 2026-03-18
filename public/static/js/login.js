@@ -4,12 +4,13 @@
 
   form.onsubmit = async (e) => {
     e.preventDefault();
+    const familyName = document.getElementById('family-name').value;
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ familyName, username, password })
     });
     if (res.ok) {
       window.location.href = '/';
@@ -45,6 +46,7 @@
         registerForm.style.display = 'none';
         showRegister.innerText = '新しい家族（グループ）を作成する';
         // 入力欄を埋めてあげる
+        document.getElementById('family-name').value = familyName;
         document.getElementById('username').value = username;
         document.getElementById('password').value = password;
       } else {

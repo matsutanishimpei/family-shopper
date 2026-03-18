@@ -31,16 +31,14 @@ async function hashPassword(password: string): Promise<string> {
 // Middleware: Check Session and Family context
 const authMiddleware = async (c: any, next: any) => {
   const session = getCookie(c, 'session')
-  if (!session && !c.req.path.startsWith('/login') && c.req.path !== '/api/login') {
+  const familyIdFromCookie = getCookie(c, 'family_id')
+  
+  if (!session && !c.req.path.startsWith('/login') && c.req.path !== '/api/login' && c.req.path !== '/api/register-family') {
     return c.redirect('/login')
   }
   
-  if (session) {
-    // ログイン中のユーザーのfamily_idを取得
-    const user = await c.env.DB.prepare('SELECT family_id FROM users WHERE username = ?').bind(session).first() as any
-    if (user) {
-      c.set('family_id', user.family_id)
-    }
+  if (session && familyIdFromCookie) {
+    c.set('family_id', parseInt(familyIdFromCookie))
   }
   
   await next()
@@ -61,8 +59,16 @@ const adminMiddleware = async (c: any, next: any) => {
 
 // Login API
 app.post('/api/login', async (c) => {
-  const { username, password } = await c.req.json()
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username).first() as any
+  const { familyName, username, password } = await c.req.json()
+  
+  // 1. 家族を特定
+  const family = await c.env.DB.prepare('SELECT id FROM families WHERE name = ?').bind(familyName).first() as any
+  if (!family) {
+    return c.json({ success: false, error: 'Family name not found' }, 401)
+  }
+
+  // 2. その家族内のユーザーを検索
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ? AND family_id = ?').bind(username, family.id).first() as any
 
   let authenticated = false
   let role = 'member'
@@ -73,7 +79,8 @@ app.post('/api/login', async (c) => {
       authenticated = true
       role = user.role
     }
-  } else if (username === c.env.ADMIN_USER && password === c.env.ADMIN_PASS) {
+  } else if (username === c.env.ADMIN_USER && password === c.env.ADMIN_PASS && familyName === 'Default Family') {
+    // システム管理者のフォールバック（Default Family時のみ）
     authenticated = true
     role = 'admin'
     const hashed = await hashPassword(password)
@@ -83,6 +90,7 @@ app.post('/api/login', async (c) => {
 
   if (authenticated) {
     setCookie(c, 'session', username, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
+    setCookie(c, 'family_id', (user?.family_id || 1).toString(), { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     setCookie(c, 'role', role, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     return c.json({ success: true, role })
   }
@@ -125,15 +133,27 @@ app.post('/api/register-family', async (c) => {
 
 // Logout API
 app.post('/api/logout', (c) => {
-  deleteCookie(c, 'session'); deleteCookie(c, 'role')
+  deleteCookie(c, 'session'); deleteCookie(c, 'role'); deleteCookie(c, 'family_id')
   return c.json({ success: true })
 })
 
 // User Management API
 app.get('/api/admin/users', adminMiddleware, authMiddleware, async (c) => {
-  const familyId = c.get('family_id')
-  const users = await c.env.DB.prepare('SELECT id, username, role FROM users WHERE family_id = ?').bind(familyId).all()
-  return c.json(users.results || [])
+  const session = getCookie(c, 'session')
+  if (session === c.env.ADMIN_USER) {
+    // Super Admin: get all users from all families
+    const users = await c.env.DB.prepare(`
+      SELECT u.id, u.username, u.role, f.name as family_name 
+      FROM users u 
+      LEFT JOIN families f ON u.family_id = f.id
+    `).all()
+    return c.json(users.results || [])
+  } else {
+    // Family Admin: get users from current family
+    const familyId = c.get('family_id')
+    const users = await c.env.DB.prepare('SELECT id, username, role FROM users WHERE family_id = ?').bind(familyId).all()
+    return c.json(users.results || [])
+  }
 })
 
 app.post('/api/admin/users', adminMiddleware, authMiddleware, async (c) => {
@@ -147,9 +167,13 @@ app.post('/api/admin/users', adminMiddleware, authMiddleware, async (c) => {
 
 app.delete('/api/admin/users/:id', adminMiddleware, authMiddleware, async (c) => {
   const id = c.req.param('id')
-  const familyId = c.get('family_id')
-  // 自分の家族のユーザーのみ削除可能
-  await c.env.DB.prepare('DELETE FROM users WHERE id = ? AND family_id = ?').bind(id, familyId).run()
+  const session = getCookie(c, 'session')
+  if (session === c.env.ADMIN_USER) {
+    await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run()
+  } else {
+    const familyId = c.get('family_id')
+    await c.env.DB.prepare('DELETE FROM users WHERE id = ? AND family_id = ?').bind(id, familyId).run()
+  }
   return c.json({ success: true })
 })
 
@@ -235,6 +259,7 @@ app.get('/login', (c) => {
       <h1>Login</h1>
       <form id="login-form">
         <div class="input-group">
+          <input type="text" id="family-name" placeholder="家族の名前（例：松谷家）" required class="full-width" style="margin-bottom: 10px;" />
           <input type="text" id="username" placeholder="ユーザー名" required class="full-width" style="margin-bottom: 10px;" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
           <input type="password" id="password" placeholder="パスワード" required class="full-width" style="margin-bottom: 10px;" />
         </div>

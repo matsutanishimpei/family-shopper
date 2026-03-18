@@ -15,7 +15,10 @@
 
     list.innerHTML = users.map(u => `
       <li class="item">
-        <span class="item-name">${escapeHTML(u.username)} (${escapeHTML(u.role)})</span>
+        <span class="item-name">
+          ${u.family_name ? `<small style="color: #666; margin-right: 5px;">[${escapeHTML(u.family_name)}]</small>` : ''}
+          ${escapeHTML(u.username)} (${escapeHTML(u.role)})
+        </span>
         ${u.username !== currentUser ? `<button onclick="deleteUser(${u.id})" style="background:none;border:none;color:red;cursor:pointer;">削除</button>` : ''}
       </li>
     `).join('');

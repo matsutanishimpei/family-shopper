@@ -137,11 +137,11 @@ app.get('/api/admin/users', adminMiddleware, authMiddleware, async (c) => {
 })
 
 app.post('/api/admin/users', adminMiddleware, authMiddleware, async (c) => {
-  const { username, password, role } = await c.req.json()
+  const { username, password } = await c.req.json()
   const familyId = c.get('family_id')
   const hashed = await hashPassword(password)
   await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, ?)')
-    .bind(username, hashed, role || 'member', familyId).run()
+    .bind(username, hashed, 'member', familyId).run()
   return c.json({ success: true })
 })
 
@@ -270,10 +270,6 @@ app.get('/admin', adminMiddleware, authMiddleware, async (c) => {
           <form id="user-form" class="input-group">
             <input type="text" id="new-username" placeholder="名前" required inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
             <input type="password" id="new-password" placeholder="パスワード" required />
-            <select id="new-role">
-              <option value="member">家族メンバー</option>
-              <option value="admin">管理者</option>
-            </select>
             <button type="submit" class="primary">追加</button>
           </form>
           <ul id="user-list" class="item-list" style="margin-top: 10px;"></ul>

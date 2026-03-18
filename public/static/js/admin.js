@@ -33,11 +33,10 @@
       e.preventDefault();
       const username = document.getElementById('new-username').value;
       const password = document.getElementById('new-password').value;
-      const role = document.getElementById('new-role').value;
       await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role })
+        body: JSON.stringify({ username, password })
       });
       e.target.reset();
       loadUsers();

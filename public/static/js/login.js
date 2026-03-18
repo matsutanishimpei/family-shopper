@@ -13,7 +13,12 @@
       body: JSON.stringify({ familyName, username, password })
     });
     if (res.ok) {
-      window.location.href = '/';
+      const data = await res.json();
+      if (data.role === 'admin') {
+        window.location.href = '/admin';
+      } else {
+        window.location.href = '/';
+      }
     } else {
       alert('ログインに失敗しました。');
     }

@@ -324,6 +324,12 @@ app.get('/admin', adminMiddleware, authMiddleware, async (c) => {
 app.get('/', authMiddleware, async (c) => {
   const user = getCookie(c, 'session')
   const role = getCookie(c, 'role')
+
+  // システム管理者は管理画面へ強制リダイレクト
+  if (user === c.env.ADMIN_USER && role === 'admin') {
+    return c.redirect('/admin')
+  }
+
   const familyId = c.get('family_id')
   
   // 家族名を取得

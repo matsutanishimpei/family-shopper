@@ -1,6 +1,5 @@
 import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
-import { serveStatic } from 'hono/cloudflare-pages'
 import { renderer } from './renderer'
 
 type Bindings = {
@@ -18,11 +17,6 @@ type Variables = {
 }
 
 const app = new Hono<{ Bindings: Bindings, Variables: Variables }>()
-
-// Serve static files first
-app.use('/js/*', serveStatic())
-app.use('/favicon.ico', serveStatic())
-app.use('/style.css', serveStatic())
 
 app.use(renderer)
 
@@ -241,7 +235,7 @@ app.get('/login', (c) => {
           <button type="submit" class="full-width" style="background: #6c5ce7; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer;">登録して開始</button>
         </form>
       </div>
-      <script src="/js/login.js"></script>
+      <script src="/static/js/login.js"></script>
     </div>
   )
 })
@@ -271,7 +265,7 @@ app.get('/admin', adminMiddleware, authMiddleware, async (c) => {
         </section>
       </div>
       <script dangerouslySetInnerHTML={{ __html: `window.CURRENT_USER = '${user}';` }} />
-      <script src="/js/admin.js"></script>
+      <script src="/static/js/admin.js"></script>
     </div>
   )
 })
@@ -348,7 +342,7 @@ app.get('/', authMiddleware, async (c) => {
           uploadPreset: '${c.env.UPLOAD_PRESET}'
         };
       ` }} />
-      <script src="/js/main.js"></script>
+      <script src="/static/js/main.js"></script>
     </>
   )
 })

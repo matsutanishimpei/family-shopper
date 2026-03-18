@@ -13,7 +13,7 @@ export const AdminPage = ({ familyName, user }: { familyName: string, user: stri
       <section style="margin-top: 20px;">
         <h2>家族ユーザー管理</h2>
         <form id="user-form" class="input-group">
-          <input type="text" id="new-username" placeholder="名前" required inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
+          <input type="email" id="new-username" placeholder="名前" required autocapitalize="none" autocorrect="off" spellcheck={false} />
           <input type="password" id="new-password" placeholder="パスワード" required />
           <button type="submit" class="primary">追加</button>
         </form>

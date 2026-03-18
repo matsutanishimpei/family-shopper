@@ -88,6 +88,22 @@ app.post('/api/login', async (c) => {
   return c.json({ success: false, error: 'Invalid credentials' }, 401)
 })
 
+// Family Registration API
+app.post('/api/families', async (c) => {
+  const { familyName, username, password } = await c.req.json()
+  
+  // 1. 家族を登録
+  const result = await c.env.DB.prepare('INSERT INTO families (name) VALUES (?) RETURNING id').bind(familyName).first() as any
+  const familyId = result.id
+
+  // 2. その家族の管理者ユーザーを登録
+  const hashed = await hashPassword(password)
+  await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, ?)')
+    .bind(username, hashed, 'admin', familyId).run()
+
+  return c.json({ success: true, familyId })
+})
+
 // Logout API
 app.post('/api/logout', (c) => {
   deleteCookie(c, 'session'); deleteCookie(c, 'role')
@@ -205,17 +221,30 @@ app.get('/login', (c) => {
         </div>
         <button type="submit" class="primary full-width">ログイン</button>
       </form>
+      <div style="margin-top: 20px; text-align: center; border-top: 1px solid #eee; padding-top: 20px;">
+        <a href="#" id="show-register" style="font-size: 0.9em; color: #6c5ce7; text-decoration: none;">新しい家族（グループ）を作成する</a>
+        <form id="register-family-form" style="display: none; margin-top: 15px; text-align: left;">
+          <h2 style="font-size: 1em; margin-bottom: 10px;">新規家族登録</h2>
+          <input type="text" id="reg-family-name" placeholder="家族の名前（例：松谷家）" required class="full-width" style="margin-bottom: 10px;" />
+          <input type="text" id="reg-username" placeholder="管理者名（英字推奨）" required class="full-width" style="margin-bottom: 10px;" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
+          <input type="password" id="reg-password" placeholder="パスワード" required class="full-width" style="margin-bottom: 10px;" />
+          <button type="submit" class="full-width" style="background: #6c5ce7; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer;">登録して開始</button>
+        </form>
+      </div>
       <script src="/js/login.js"></script>
     </div>
   )
 })
 
-app.get('/admin', adminMiddleware, authMiddleware, (c) => {
+app.get('/admin', adminMiddleware, authMiddleware, async (c) => {
   const user = getCookie(c, 'session')
+  const familyId = c.get('family_id')
+  const family = await c.env.DB.prepare('SELECT name FROM families WHERE id = ?').bind(familyId).first() as any
+  
   return c.render(
     <div class="admin-page">
       <div class="card">
-        <h1>管理者ページ</h1>
+        <h1>{family?.name || '家族'} 管理設定</h1>
         <p><a href="/">← メインページへ戻る</a></p>
         <section style="margin-top: 20px;">
           <h2>家族ユーザー管理</h2>
@@ -237,15 +266,19 @@ app.get('/admin', adminMiddleware, authMiddleware, (c) => {
   )
 })
 
-app.get('/', authMiddleware, (c) => {
+app.get('/', authMiddleware, async (c) => {
   const user = getCookie(c, 'session')
   const role = getCookie(c, 'role')
+  const familyId = c.get('family_id')
   
+  // 家族名を取得
+  const family = await c.env.DB.prepare('SELECT name FROM families WHERE id = ?').bind(familyId).first() as any
+
   return c.render(
     <>
       <div class="user-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: white; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
         <div>
-          <span style="font-weight: 600; color: #333;">👤 {user} さん</span>
+          <span style="font-weight: 600; color: #333;">🏠 {family?.name || '家族'} / 👤 {user} さん</span>
           {role === 'admin' && <a href="/admin" style="margin-left: 15px; font-size: 0.9em; color: #6c5ce7; text-decoration: none;">⚙️ 管理者ページ</a>}
         </div>
         <button id="logout-btn" style="background: none; border: 1px solid #ddd; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #666;">ログアウト</button>

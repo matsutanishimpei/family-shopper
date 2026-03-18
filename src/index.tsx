@@ -12,7 +12,11 @@ type Bindings = {
   CLOUDINARY_API_SECRET?: string
 }
 
-const app = new Hono<{ Bindings: Bindings }>()
+type Variables = {
+  family_id: number
+}
+
+const app = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 app.use(renderer)
 
 // Helper: Hash password
@@ -23,12 +27,21 @@ async function hashPassword(password: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-// Middleware: Check Session
+// Middleware: Check Session and Family context
 const authMiddleware = async (c: any, next: any) => {
   const session = getCookie(c, 'session')
   if (!session && !c.req.path.startsWith('/login') && c.req.path !== '/api/login') {
     return c.redirect('/login')
   }
+  
+  if (session) {
+    // ログイン中のユーザーのfamily_idを取得
+    const user = await c.env.DB.prepare('SELECT family_id FROM users WHERE username = ?').bind(session).first() as any
+    if (user) {
+      c.set('family_id', user.family_id)
+    }
+  }
+  
   await next()
 }
 
@@ -63,7 +76,7 @@ app.post('/api/login', async (c) => {
     authenticated = true
     role = 'admin'
     const hashed = await hashPassword(password)
-    await c.env.DB.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
+    await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, 1)')
       .bind(username, hashed, 'admin').run()
   }
 
@@ -82,42 +95,49 @@ app.post('/api/logout', (c) => {
 })
 
 // User Management API
-app.get('/api/admin/users', adminMiddleware, async (c) => {
-  const users = await c.env.DB.prepare('SELECT id, username, role FROM users').all()
+app.get('/api/admin/users', adminMiddleware, authMiddleware, async (c) => {
+  const familyId = c.get('family_id')
+  const users = await c.env.DB.prepare('SELECT id, username, role FROM users WHERE family_id = ?').bind(familyId).all()
   return c.json(users.results || [])
 })
 
-app.post('/api/admin/users', adminMiddleware, async (c) => {
+app.post('/api/admin/users', adminMiddleware, authMiddleware, async (c) => {
   const { username, password, role } = await c.req.json()
+  const familyId = c.get('family_id')
   const hashed = await hashPassword(password)
-  await c.env.DB.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
-    .bind(username, hashed, role || 'member').run()
+  await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, ?)')
+    .bind(username, hashed, role || 'member', familyId).run()
   return c.json({ success: true })
 })
 
-app.delete('/api/admin/users/:id', adminMiddleware, async (c) => {
+app.delete('/api/admin/users/:id', adminMiddleware, authMiddleware, async (c) => {
   const id = c.req.param('id')
-  await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run()
+  const familyId = c.get('family_id')
+  // 自分の家族のユーザーのみ削除可能
+  await c.env.DB.prepare('DELETE FROM users WHERE id = ? AND family_id = ?').bind(id, familyId).run()
   return c.json({ success: true })
 })
 
 // Item Management API
 app.get('/api/items', authMiddleware, async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM items ORDER BY created_at DESC').all()
+  const familyId = c.get('family_id')
+  const { results } = await c.env.DB.prepare('SELECT * FROM items WHERE family_id = ? ORDER BY created_at DESC').bind(familyId).all()
   return c.json(results || [])
 })
 
 app.post('/api/items', authMiddleware, async (c) => {
   const { name, count, unit, category, image_url } = await c.req.json()
-  await c.env.DB.prepare('INSERT INTO items (name, count, unit, category, image_url) VALUES (?, ?, ?, ?, ?)')
-    .bind(name, count, unit, category, image_url || null).run()
+  const familyId = c.get('family_id')
+  await c.env.DB.prepare('INSERT INTO items (name, count, unit, category, image_url, family_id) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(name, count, unit, category, image_url || null, familyId).run()
   return c.json({ success: true }, 201)
 })
 
 app.patch('/api/items/:id', authMiddleware, async (c) => {
   const id = c.req.param('id')
   const { bought } = await c.req.json()
-  await c.env.DB.prepare('UPDATE items SET bought = ? WHERE id = ?').bind(bought ? 1 : 0, id).run()
+  const familyId = c.get('family_id')
+  await c.env.DB.prepare('UPDATE items SET bought = ? WHERE id = ? AND family_id = ?').bind(bought ? 1 : 0, id, familyId).run()
   return c.json({ success: true })
 })
 
@@ -145,15 +165,13 @@ app.post('/api/images/delete', authMiddleware, async (c) => {
 
 app.delete('/api/items/:id', authMiddleware, async (c) => {
   const id = c.req.param('id')
-  const item = await c.env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first() as any
+  const familyId = c.get('family_id')
+  const item = await c.env.DB.prepare('SELECT * FROM items WHERE id = ? AND family_id = ?').bind(id, familyId).first() as any
   
   if (item && item.image_url && c.env.CLOUDINARY_API_KEY && c.env.CLOUDINARY_API_SECRET) {
     const parts = item.image_url.split('/')
     const fileName = parts.pop()
     const publicId = fileName.split('.')[0]
-    
-    // If there are folders, we might need them, but Cloudinary upload usually returns just the filename if no folder is specified.
-    // However, the current code just takes the last part. Let's stick with that for now as it matches the upload logic.
     
     const timestamp = Math.round(new Date().getTime() / 1000)
     const str = `public_id=${publicId}&timestamp=${timestamp}${c.env.CLOUDINARY_API_SECRET}`
@@ -168,7 +186,7 @@ app.delete('/api/items/:id', authMiddleware, async (c) => {
     })
   }
 
-  await c.env.DB.prepare('DELETE FROM items WHERE id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM items WHERE id = ? AND family_id = ?').bind(id, familyId).run()
   return c.json({ success: true })
 })
 
@@ -192,7 +210,7 @@ app.get('/login', (c) => {
   )
 })
 
-app.get('/admin', adminMiddleware, (c) => {
+app.get('/admin', adminMiddleware, authMiddleware, (c) => {
   const user = getCookie(c, 'session')
   return c.render(
     <div class="admin-page">

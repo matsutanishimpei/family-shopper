@@ -5,9 +5,19 @@ Cloudflare D1 (SQLite) を使用しています。
 
 ```mermaid
 erDiagram
+    families ||--o{ users : "is composed of"
+    families ||--o{ items : "contains"
+
+    families {
+        integer id PK
+        text name "Unique"
+        datetime created_at
+    }
+
     users {
         integer id PK
-        text username "Unique"
+        integer family_id FK
+        text username "Unique with family_id"
         text password_hash
         text role "admin | member"
         datetime created_at
@@ -15,6 +25,7 @@ erDiagram
 
     items {
         integer id PK
+        integer family_id FK
         text name
         integer count
         text unit
@@ -27,11 +38,18 @@ erDiagram
 
 ## テーブル詳細
 
+### families
+家族グループを管理します。
+- `name`: 家族の表示名（例：松谷家）。
+
 ### users
-家族メンバー情報を管理します。
-- `role`: 管理者(`admin`)はユーザー追加が可能、家族メンバー(`member`)はアイテムの管理のみ可能です。
+各家族に所属するメンバー情報を管理します。
+- `family_id`: 所属する家族への参照。
+- `username`: 家族内においてユニークである必要があります。
+- `role`: 家族の作成者（管理者）は `admin`、追加されたメンバーは `member` となります。
 
 ### items
-お買い物リストのアイテムを管理します。
-- `image_url`: Cloudinaryにアップロードされた画像の絶対URLが格納されます。
-- `bought`: 購入済みフラグ。JSX/JS側で `true/false` として扱われます。
+家族ごとの買い物リストアイテムを管理します。
+- `family_id`: どの家族のリストかを示す参照。
+- `image_url`: Cloudinaryにアップロードされた画像の絶対URL。
+- `bought`: 購入済みフラグ。

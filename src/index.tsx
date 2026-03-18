@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
+import { serveStatic } from 'hono/cloudflare-pages'
 import { renderer } from './renderer'
 
 type Bindings = {
@@ -18,6 +19,7 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 app.use(renderer)
+app.get('/js/*', serveStatic())
 
 // Helper: Hash password
 async function hashPassword(password: string): Promise<string> {

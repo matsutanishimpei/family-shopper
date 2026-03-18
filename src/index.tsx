@@ -18,8 +18,13 @@ type Variables = {
 }
 
 const app = new Hono<{ Bindings: Bindings, Variables: Variables }>()
+
+// Serve static files first
+app.use('/js/*', serveStatic())
+app.use('/favicon.ico', serveStatic())
+app.use('/style.css', serveStatic())
+
 app.use(renderer)
-app.get('/js/*', serveStatic())
 
 // Helper: Hash password
 async function hashPassword(password: string): Promise<string> {

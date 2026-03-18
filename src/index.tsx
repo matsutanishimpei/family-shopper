@@ -182,7 +182,7 @@ app.get('/login', (c) => {
       <h1>Login</h1>
       <form id="login-form">
         <div class="input-group">
-          <input type="text" id="username" placeholder="ユーザー名" required class="full-width" style="margin-bottom: 10px;" />
+          <input type="text" id="username" placeholder="ユーザー名" required class="full-width" style="margin-bottom: 10px;" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
           <input type="password" id="password" placeholder="パスワード" required class="full-width" style="margin-bottom: 10px;" />
         </div>
         <button type="submit" class="primary full-width">ログイン</button>
@@ -202,7 +202,7 @@ app.get('/admin', adminMiddleware, (c) => {
         <section style="margin-top: 20px;">
           <h2>家族ユーザー管理</h2>
           <form id="user-form" class="input-group">
-            <input type="text" id="new-username" placeholder="名前" required />
+            <input type="text" id="new-username" placeholder="名前" required inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
             <input type="password" id="new-password" placeholder="パスワード" required />
             <select id="new-role">
               <option value="member">家族メンバー</option>

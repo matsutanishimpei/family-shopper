@@ -61,40 +61,55 @@ const adminMiddleware = async (c: any, next: any) => {
 app.post('/api/login', async (c) => {
   const { familyName, username, password } = await c.req.json()
   
-  // 1. 家族を特定
-  const family = await c.env.DB.prepare('SELECT id FROM families WHERE name = ?').bind(familyName).first() as any
-  if (!family) {
-    return c.json({ success: false, error: 'Family name not found' }, 401)
-  }
-
-  // 2. その家族内のユーザーを検索
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ? AND family_id = ?').bind(username, family.id).first() as any
-
+  let familyId = 0
   let authenticated = false
   let role = 'member'
 
-  if (user) {
-    const hashed = await hashPassword(password)
-    if (user.password_hash === hashed) {
-      authenticated = true
-      role = user.role
+  // 1. 家族を特定
+  if (familyName) {
+    const family = await c.env.DB.prepare('SELECT id FROM families WHERE name = ?').bind(familyName).first() as any
+    if (family) {
+      familyId = family.id
     }
-  } else if (username === c.env.ADMIN_USER && password === c.env.ADMIN_PASS && familyName === 'Default Family') {
-    // システム管理者のフォールバック（Default Family時のみ）
+  }
+
+  // 2. 認証処理
+  if (familyId > 0) {
+    // 一般ユーザーの検索
+    const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ? AND family_id = ?').bind(username, familyId).first() as any
+    if (user) {
+      const hashed = await hashPassword(password)
+      if (user.password_hash === hashed) {
+        authenticated = true
+        role = user.role
+      }
+    }
+  }
+
+  // 3. システム管理者のフォールバック
+  if (!authenticated && username === c.env.ADMIN_USER && password === c.env.ADMIN_PASS) {
+    // 家族名が空、または Default Family 指定、またはシステム管理者情報が一致
     authenticated = true
     role = 'admin'
-    const hashed = await hashPassword(password)
-    await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, 1)')
-      .bind(username, hashed, 'admin').run()
+    familyId = 1 // Default Family
+    
+    // 初回のみ管理者ユーザーを作成
+    const existing = await c.env.DB.prepare('SELECT id FROM users WHERE username = ? AND family_id = 1').bind(username).first() as any
+    if (!existing) {
+      const hashed = await hashPassword(password)
+      await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, 1)')
+        .bind(username, hashed, 'admin').run()
+    }
   }
 
   if (authenticated) {
     setCookie(c, 'session', username, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
-    setCookie(c, 'family_id', (user?.family_id || 1).toString(), { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
+    setCookie(c, 'family_id', familyId.toString(), { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     setCookie(c, 'role', role, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     return c.json({ success: true, role })
   }
-  return c.json({ success: false, error: 'Invalid credentials' }, 401)
+  
+  return c.json({ success: false, error: 'Invalid credentials or family name' }, 401)
 })
 
 // Debug Route
@@ -259,7 +274,7 @@ app.get('/login', (c) => {
       <h1>Login</h1>
       <form id="login-form">
         <div class="input-group">
-          <input type="text" id="family-name" placeholder="家族の名前（例：松谷家）" required class="full-width" style="margin-bottom: 10px;" />
+          <input type="text" id="family-name" placeholder="家族の名前（空欄で管理者ログイン）" class="full-width" style="margin-bottom: 10px;" />
           <input type="text" id="username" placeholder="ユーザー名" required class="full-width" style="margin-bottom: 10px;" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
           <input type="password" id="password" placeholder="パスワード" required class="full-width" style="margin-bottom: 10px;" />
         </div>

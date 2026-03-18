@@ -4,7 +4,7 @@ export const LoginForm = () => (
     <form id="login-form">
       <div class="input-group">
         <input type="text" id="family-name" placeholder="家族の名前（空欄で管理者ログイン）" class="full-width" style="margin-bottom: 10px;" />
-        <input type="email" id="username" placeholder="ユーザー名" required class="full-width" style="margin-bottom: 10px;" autocapitalize="none" autocorrect="off" spellcheck={false} />
+        <input type="text" id="username" placeholder="ユーザー名" required class="full-width" style="margin-bottom: 10px;" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
         <input type="password" id="password" placeholder="パスワード" required class="full-width" style="margin-bottom: 10px;" />
       </div>
       <button type="submit" class="primary full-width">ログイン</button>
@@ -14,7 +14,7 @@ export const LoginForm = () => (
       <form id="register-family-form" style="display: none; margin-top: 15px; text-align: left;">
         <h2 style="font-size: 1em; margin-bottom: 10px;">新規家族登録</h2>
         <input type="text" id="reg-family-name" placeholder="家族の名前（例：松谷家）" required class="full-width" style="margin-bottom: 10px;" />
-        <input type="email" id="reg-username" placeholder="管理者名（英字推奨）" required class="full-width" style="margin-bottom: 10px;" autocapitalize="none" autocorrect="off" spellcheck={false} />
+        <input type="text" id="reg-username" placeholder="管理者名（英字推奨）" required class="full-width" style="margin-bottom: 10px;" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck={false} />
         <input type="password" id="reg-password" placeholder="パスワード" required class="full-width" style="margin-bottom: 10px;" />
         <button type="submit" class="full-width" style="background: #6c5ce7; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer;">登録して開始</button>
       </form>

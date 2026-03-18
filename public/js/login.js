@@ -33,7 +33,7 @@
       const username = document.getElementById('reg-username').value;
       const password = document.getElementById('reg-password').value;
 
-      const res = await fetch('/api/families', {
+      const res = await fetch('/api/register-family', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ familyName, username, password })

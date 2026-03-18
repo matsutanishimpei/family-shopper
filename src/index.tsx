@@ -88,8 +88,11 @@ app.post('/api/login', async (c) => {
   return c.json({ success: false, error: 'Invalid credentials' }, 401)
 })
 
+// Debug Route
+app.get('/api/check', (c) => c.json({ status: 'ok' }))
+
 // Family Registration API
-app.post('/api/families', async (c) => {
+app.post('/api/register-family', async (c) => {
   const { familyName, username, password } = await c.req.json()
   
   // 1. 家族を登録

@@ -3,7 +3,7 @@ import { getCookie } from 'hono/cookie'
 import { AdminPage } from '../components/AdminPage'
 import { authMiddleware, adminMiddleware } from '../lib/middleware'
 import { hashPassword } from '../lib/utils'
-import type { Bindings, Variables } from '../types'
+import type { Bindings, Variables, Family, User } from '../types'
 
 const admin = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
@@ -13,8 +13,8 @@ admin.use('/api/admin/*', authMiddleware, adminMiddleware)
 admin.get('/admin', async (c) => {
   const user = getCookie(c, 'session')!
   const familyId = c.get('family_id')
-  const family = await c.env.DB.prepare('SELECT name FROM families WHERE id = ?').bind(familyId).first() as any
-  return c.render(<AdminPage familyName={family?.name} user={user} />)
+  const family = await c.env.DB.prepare('SELECT name FROM families WHERE id = ?').bind(familyId).first<Family>()
+  return c.render(<AdminPage familyName={family?.name || ''} user={user} />)
 })
 
 admin.get('/api/admin/users', async (c) => {

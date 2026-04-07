@@ -1,6 +1,7 @@
+import type { Child } from 'hono/jsx'
 import { jsxRenderer } from 'hono/jsx-renderer'
 
-export const renderer = jsxRenderer(({ children }) => {
+export const renderer = jsxRenderer(({ children }: { children?: Child }) => {
   return (
     <html lang="ja">
       <head>
@@ -11,6 +12,7 @@ export const renderer = jsxRenderer(({ children }) => {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
         <link href="/style.css" rel="stylesheet" />
+        <link rel="icon" type="image/png" href="/favicon.png" />
       </head>
       <body>
         <div id="app">{children}</div>

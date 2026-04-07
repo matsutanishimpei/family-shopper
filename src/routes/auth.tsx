@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { setCookie, deleteCookie } from 'hono/cookie'
 import { LoginForm } from '../components/LoginForm'
 import { hashPassword } from '../lib/utils'
-import type { Bindings, Variables } from '../types'
+import type { Bindings, Variables, Family, User } from '../types'
 
 const auth = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
@@ -16,14 +16,14 @@ auth.post('/api/login', async (c) => {
   let role = 'member'
 
   if (familyName) {
-    const family = await c.env.DB.prepare('SELECT id FROM families WHERE name = ?').bind(familyName).first() as any
+    const family = await c.env.DB.prepare('SELECT id FROM families WHERE name = ?').bind(familyName).first<Family>()
     if (family) {
       familyId = family.id
     }
   }
 
   if (familyId > 0) {
-    const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ? AND family_id = ?').bind(username, familyId).first() as any
+    const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ? AND family_id = ?').bind(username, familyId).first<User>()
     if (user) {
       const hashed = await hashPassword(password)
       if (user.password_hash === hashed) {
@@ -38,7 +38,7 @@ auth.post('/api/login', async (c) => {
     role = 'admin'
     familyId = 1
     
-    const existing = await c.env.DB.prepare('SELECT id FROM users WHERE username = ? AND family_id = 1').bind(username).first() as any
+    const existing = await c.env.DB.prepare('SELECT id FROM users WHERE username = ? AND family_id = 1').bind(username).first<User>()
     if (!existing) {
       const hashed = await hashPassword(password)
       await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, 1)')
@@ -65,7 +65,7 @@ auth.post('/api/register-family', async (c) => {
 
     const result = await c.env.DB.prepare('INSERT INTO families (name) VALUES (?) RETURNING id')
       .bind(familyName)
-      .first() as { id: number } | null
+      .first<Family>()
     
     if (!result || !result.id) throw new Error('Failed to create family record')
     const familyId = result.id
@@ -74,8 +74,9 @@ auth.post('/api/register-family', async (c) => {
       .bind(username, hashed, 'admin', familyId).run()
 
     return c.json({ success: true, familyId })
-  } catch (err: any) {
-    return c.json({ success: false, error: err.message || 'Internal Server Error' }, 500)
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Internal Server Error'
+    return c.json({ success: false, error: errorMessage }, 500)
   }
 })
 

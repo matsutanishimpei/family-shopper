@@ -1,15 +1,15 @@
 :root {
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  --card-bg: rgba(255, 255, 255, 0.8);
-  --text-main: #1f2937;
-  --text-muted: #6b7280;
-  --accent: #ec4899;
-  --radius: 16px;
-  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.3);
+  --primary: #385170; /* 藍鉄 (Aitetsu) - dark indigo slate */
+  --primary-hover: #253b56;
+  --bg-color: #f5f2eb; /* 練色 (Neri-iro) - soft washi paper cream */
+  --card-bg: #ffffff;
+  --text-main: #2c3539; /* 消炭色 (Keshizumi-iro) - warm dark charcoal */
+  --text-muted: #707c80; /* 灰色 */
+  --accent: #8e354a; /* 小豆色 (Azuki-iro) - muted plum red */
+  --radius: 8px; /* Clean, not too rounded */
+  --shadow: 0 4px 12px rgba(44, 53, 57, 0.06);
+  --glass-bg: #ffffff;
+  --glass-border: #e4dec9; /* Warm borders */
 }
 
 * {
@@ -19,9 +19,8 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg-gradient);
-  background-attachment: fixed;
+  font-family: 'Inter', "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg-color);
   color: var(--text-main);
   min-height: 100vh;
   display: flex;
@@ -58,10 +57,7 @@ h1 {
   font-weight: 800;
   text-align: center;
   margin-bottom: 24px;
-  background: linear-gradient(to right, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--primary);
 }
 
 .input-group {
@@ -87,7 +83,7 @@ input, select {
 input:focus, select:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 3px rgba(56, 81, 112, 0.2);
 }
 
 button.primary {
@@ -262,7 +258,7 @@ input, select, button.primary {
 .item-count-label {
   font-weight: 700;
   color: var(--primary);
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(56, 81, 112, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
 }

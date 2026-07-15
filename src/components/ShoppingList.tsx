@@ -3,7 +3,7 @@ export const ShoppingList = ({ familyName, user, role, cloudName, uploadPreset }
     <div class="user-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: white; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
       <div>
         <span style="font-weight: 600; color: #333;">🏠 {familyName || '家族'} / 👤 {user} さん</span>
-        {role === 'admin' && <a href="/admin" style="margin-left: 15px; font-size: 0.9em; color: #6c5ce7; text-decoration: none;">⚙️ 管理者ページ</a>}
+        {role === 'admin' && <a href="/admin" style="margin-left: 15px; font-size: 0.9em; color: var(--primary); text-decoration: none;">⚙️ 管理者ページ</a>}
       </div>
       <button id="logout-btn" style="background: none; border: 1px solid #ddd; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #666;">ログアウト</button>
     </div>

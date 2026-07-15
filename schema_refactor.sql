@@ -37,3 +37,8 @@ CREATE TABLE items (
 
 -- Initialize Default Family
 INSERT INTO families (id, name) VALUES (1, 'Default Family');
+
+-- Indices for performance optimization
+CREATE INDEX IF NOT EXISTS idx_items_family_created ON items(family_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_family_id ON users(family_id);
+

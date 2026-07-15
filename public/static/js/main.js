@@ -197,13 +197,42 @@
     }
 
     async function toggleBought(id, bought) {
-      await fetch(`/api/items/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bought })
-      });
-      await fetchItems();
+      const item = items.find(i => i.id === id);
+      const originalBought = item ? item.bought : 0;
+
+      // Optimistic UI update
+      if (item) {
+        item.bought = bought ? 1 : 0;
+        render();
+      }
+
+      try {
+        const res = await fetch(`/api/items/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bought })
+        });
+        if (!res.ok) {
+          throw new Error('Failed to update bought status');
+        }
+        
+        // Fetch fresh list from server in the background
+        const listRes = await fetch('/api/items');
+        if (listRes.ok) {
+          items = await listRes.json();
+          render();
+        }
+      } catch (err) {
+        console.error('Failed to update bought status:', err);
+        // Rollback to original state
+        if (item) {
+          item.bought = originalBought;
+          render();
+        }
+        alert('通信エラーが発生したため、購入ステータスの更新に失敗しました。');
+      }
     }
+
 
     window.deleteItem = async function(id) {
       if (!confirm('画像をCloudinaryからも完全に削除しますか？')) return;

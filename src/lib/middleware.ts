@@ -1,26 +1,35 @@
-import { getCookie } from 'hono/cookie'
+import { getSignedCookie } from 'hono/cookie'
 import type { Context, Next } from 'hono'
 import type { Bindings, Variables } from '../types'
 
+const getCookieSecret = (c: Context<{ Bindings: Bindings, Variables: any }>) => {
+  return c.env.COOKIE_SECRET || 'default-secure-cookie-secret-fallback-key-2026'
+}
+
 export const authMiddleware = async (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: Next) => {
-  const session = getCookie(c, 'session')
-  const familyIdFromCookie = getCookie(c, 'family_id')
+  const secret = getCookieSecret(c)
+  const session = await getSignedCookie(c, secret, 'session')
+  const familyIdFromCookie = await getSignedCookie(c, secret, 'family_id')
   
-  if (!session && !c.req.path.startsWith('/login') && c.req.path !== '/api/login' && c.req.path !== '/api/register-family') {
+  const isAuthenticated = typeof session === 'string' && session.length > 0
+  
+  if (!isAuthenticated && !c.req.path.startsWith('/login') && c.req.path !== '/api/login' && c.req.path !== '/api/register-family') {
     return c.redirect('/login')
   }
   
-  if (session && familyIdFromCookie) {
-    c.set('family_id', parseInt(familyIdFromCookie))
+  if (isAuthenticated && typeof familyIdFromCookie === 'string') {
+    c.set('family_id', parseInt(familyIdFromCookie, 10))
   }
   
   await next()
 }
 
 export const adminMiddleware = async (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: Next) => {
-  const role = getCookie(c, 'role')
+  const secret = getCookieSecret(c)
+  const role = await getSignedCookie(c, secret, 'role')
   if (role !== 'admin') {
     return c.text('Forbidden', 403)
   }
   await next()
 }
+

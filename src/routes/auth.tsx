@@ -1,16 +1,27 @@
 import { Hono } from 'hono'
-import { setCookie, deleteCookie } from 'hono/cookie'
+import { setSignedCookie, deleteCookie } from 'hono/cookie'
 import { LoginForm } from '../components/LoginForm'
-import { hashPassword } from '../lib/utils'
+import { hashPassword, verifyPassword } from '../lib/utils'
 import type { Bindings, Variables, Family, User } from '../types'
 
 const auth = new Hono<{ Bindings: Bindings, Variables: Variables }>()
+
+const getCookieSecret = (c: any) => {
+  return c.env.COOKIE_SECRET || 'default-secure-cookie-secret-fallback-key-2026'
+}
 
 auth.get('/login', (c) => c.render(<LoginForm />))
 
 auth.post('/api/login', async (c) => {
   const { familyName, username, password } = await c.req.json()
   
+  if (!username || typeof username !== 'string' || username.trim() === '') {
+    return c.json({ success: false, error: 'ユーザー名は必須です。' }, 400)
+  }
+  if (!password || typeof password !== 'string' || password.trim() === '') {
+    return c.json({ success: false, error: 'パスワードは必須です。' }, 400)
+  }
+
   let familyId = 0
   let authenticated = false
   let role = 'member'
@@ -25,8 +36,8 @@ auth.post('/api/login', async (c) => {
   if (familyId > 0) {
     const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ? AND family_id = ?').bind(username, familyId).first<User>()
     if (user) {
-      const hashed = await hashPassword(password)
-      if (user.password_hash === hashed) {
+      const match = await verifyPassword(password, user.password_hash)
+      if (match) {
         authenticated = true
         role = user.role
       }
@@ -47,42 +58,70 @@ auth.post('/api/login', async (c) => {
   }
 
   if (authenticated) {
-    setCookie(c, 'session', username, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
-    setCookie(c, 'family_id', familyId.toString(), { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
-    setCookie(c, 'role', role, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
+    const secret = getCookieSecret(c)
+    await setSignedCookie(c, 'session', username, secret, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
+    await setSignedCookie(c, 'family_id', familyId.toString(), secret, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
+    await setSignedCookie(c, 'role', role, secret, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     return c.json({ success: true, role, isSuperAdmin: username === c.env.ADMIN_USER })
   }
   
-  return c.json({ success: false, error: 'Invalid credentials or family name' }, 401)
+  return c.json({ success: false, error: '家族名、ユーザー名、またはパスワードが正しくありません。' }, 401)
 })
 
 auth.post('/api/register-family', async (c) => {
   try {
     const { familyName, username, password } = await c.req.json()
-    if (!familyName || !username || !password) {
-      return c.json({ success: false, error: 'Missing required fields' }, 400)
+    
+    if (!familyName || typeof familyName !== 'string' || familyName.trim() === '') {
+      return c.json({ success: false, error: '家族名は必須項目です。' }, 400)
+    }
+    if (familyName.length > 50) {
+      return c.json({ success: false, error: '家族名は50文字以内で入力してください。' }, 400)
+    }
+    if (!username || typeof username !== 'string' || username.trim() === '') {
+      return c.json({ success: false, error: '管理者名は必須項目です。' }, 400)
+    }
+    if (username.length > 50) {
+      return c.json({ success: false, error: '管理者名は50文字以内で入力してください。' }, 400)
+    }
+    if (!password || typeof password !== 'string' || password.length < 4) {
+      return c.json({ success: false, error: 'パスワードは4文字以上で指定してください。' }, 400)
     }
 
-    const result = await c.env.DB.prepare('INSERT INTO families (name) VALUES (?) RETURNING id')
-      .bind(familyName)
-      .first<Family>()
-    
-    if (!result || !result.id) throw new Error('Failed to create family record')
-    const familyId = result.id
+    // Insert family
+    let familyId: number
+    try {
+      const result = await c.env.DB.prepare('INSERT INTO families (name) VALUES (?) RETURNING id')
+        .bind(familyName)
+        .first<Family>()
+      if (!result || !result.id) {
+        throw new Error('Failed to retrieve family ID')
+      }
+      familyId = result.id
+    } catch (dbErr: any) {
+      if (dbErr.message && dbErr.message.includes('UNIQUE constraint failed')) {
+        return c.json({ success: false, error: 'この家族名はすでに使われています。別の名前を指定してください。' }, 400)
+      }
+      throw dbErr
+    }
+
     const hashed = await hashPassword(password)
     await c.env.DB.prepare('INSERT INTO users (username, password_hash, role, family_id) VALUES (?, ?, ?, ?)')
       .bind(username, hashed, 'admin', familyId).run()
 
     return c.json({ success: true, familyId })
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Internal Server Error'
-    return c.json({ success: false, error: errorMessage }, 500)
+    console.error('Family registration failed:', err)
+    return c.json({ success: false, error: 'システムエラーが発生しました。時間を置いて再度お試しください。' }, 500)
   }
 })
 
 auth.post('/api/logout', (c) => {
-  deleteCookie(c, 'session'); deleteCookie(c, 'role'); deleteCookie(c, 'family_id')
+  deleteCookie(c, 'session')
+  deleteCookie(c, 'role')
+  deleteCookie(c, 'family_id')
   return c.json({ success: true })
 })
 
 export default auth
+

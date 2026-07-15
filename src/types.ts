@@ -6,6 +6,7 @@ export type Bindings = {
   ADMIN_PASS: string
   CLOUDINARY_API_KEY?: string
   CLOUDINARY_API_SECRET?: string
+  COOKIE_SECRET?: string
 }
 
 export type Variables = {

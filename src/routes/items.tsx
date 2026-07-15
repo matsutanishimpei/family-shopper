@@ -37,7 +37,7 @@ items.get('/', async (c) => {
 
 items.get('/api/items', async (c) => {
   const familyId = c.get('family_id')
-  const { results } = await c.env.DB.prepare('SELECT * FROM items WHERE family_id = ? ORDER BY created_at DESC').bind(familyId).all<Item>()
+  const { results } = await c.env.DB.prepare('SELECT id, name, count, unit, bought, category, image_url FROM items WHERE family_id = ? ORDER BY created_at DESC').bind(familyId).all<Item>()
   return c.json(results || [])
 })
 
@@ -108,7 +108,7 @@ items.post('/api/images/delete', async (c) => {
 items.delete('/api/items/:id', async (c) => {
   const id = c.req.param('id')
   const familyId = c.get('family_id')
-  const item = await c.env.DB.prepare('SELECT * FROM items WHERE id = ? AND family_id = ?').bind(id, familyId).first<Item>()
+  const item = await c.env.DB.prepare('SELECT id, image_url FROM items WHERE id = ? AND family_id = ?').bind(id, familyId).first<Item>()
   
   if (item && item.image_url && c.env.CLOUDINARY_API_KEY && c.env.CLOUDINARY_API_SECRET) {
     const parts = item.image_url.split('/')

@@ -169,6 +169,18 @@
       return String(str).replace(/[&<>"']/g, m => map[m]);
     }
 
+    function getOptimizedImageUrl(url, width = 100, height = 100) {
+      if (!url) return '';
+      if (!url.includes('cloudinary.com')) return url;
+      
+      const searchStr = '/upload/';
+      const idx = url.indexOf(searchStr);
+      if (idx === -1) return url;
+      
+      const insertIdx = idx + searchStr.length;
+      return url.slice(0, insertIdx) + `f_auto,q_auto,w_${width},h_${height},c_fill/` + url.slice(insertIdx);
+    }
+
     function render() {
       if (!list) return;
       list.innerHTML = '';
@@ -178,7 +190,7 @@
         li.className = 'item' + (item.bought ? ' bought' : '');
         li.innerHTML = `
           <div class="checkbox"></div>
-          ${item.image_url ? `<img src="${escapeHTML(item.image_url)}" onclick="event.stopPropagation(); showModal('${escapeHTML(item.image_url)}')" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; cursor: zoom-in;" title="タップで拡大" />` : ''}
+          ${item.image_url ? `<img src="${escapeHTML(getOptimizedImageUrl(item.image_url, 96, 96))}" onclick="event.stopPropagation(); showModal('${escapeHTML(item.image_url)}')" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; cursor: zoom-in;" title="タップで拡大" />` : ''}
           <div class="item-info">
             <span class="item-name">${escapeHTML(item.name)}</span>
             <span class="item-meta">購入数: <span class="item-count-label">${escapeHTML(item.count)}${escapeHTML(item.unit)}</span></span>

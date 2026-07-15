@@ -34,7 +34,7 @@ auth.post('/api/login', async (c) => {
   }
 
   if (familyId > 0) {
-    const user = await c.env.DB.prepare('SELECT * FROM users WHERE username = ? AND family_id = ?').bind(username, familyId).first<User>()
+    const user = await c.env.DB.prepare('SELECT id, username, password_hash, role, family_id FROM users WHERE username = ? AND family_id = ?').bind(username, familyId).first<User>()
     if (user) {
       const match = await verifyPassword(password, user.password_hash)
       if (match) {

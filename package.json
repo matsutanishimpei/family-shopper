@@ -12,15 +12,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "hono": "^4.12.8"
+    "hono": "4.12.8"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260316.1",
-    "@hono/vite-build": "^1.2.0",
-    "@hono/vite-dev-server": "^0.18.2",
-    "typescript": "^5.8.2",
-    "vite": "^6.3.5",
-    "vitest": "^3.0.7",
-    "wrangler": "^4.4.0"
+    "@cloudflare/workers-types": "4.20260316.1",
+    "@hono/vite-build": "1.2.0",
+    "@hono/vite-dev-server": "0.18.2",
+    "typescript": "5.8.2",
+    "vite": "6.3.5",
+    "vitest": "3.0.7",
+    "wrangler": "4.4.0"
   }
 }
